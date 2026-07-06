@@ -3,6 +3,10 @@ Standalone augmentation utility used to balance underrepresented classes
 before training. This was already applied once to generate the current
 train/ folder, but is kept here for reproducibility or future re-runs
 on new raw data.
+
+Note: VerticalFlip was removed on purpose. Skin lesions have a natural
+orientation (relative to the body), so flipping vertically can introduce
+unrealistic samples. HorizontalFlip, small rotations, and Affine are safe.
 """
 
 import os
@@ -12,7 +16,6 @@ import albumentations as A
 
 AUGMENTATION_PIPELINE = A.Compose([
     A.HorizontalFlip(p=0.5),
-    A.VerticalFlip(p=0.3),
     A.Rotate(limit=25, p=0.6),
     A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.15, p=0.5),
     A.Affine(translate_percent=0.05, scale=(0.9, 1.1), rotate=(-15, 15), p=0.4),
