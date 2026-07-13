@@ -1,0 +1,5 @@
+{
+    "best_accuracy": 0.13,
+    "batch_size": 16,
+    "image_size": 256
+}
