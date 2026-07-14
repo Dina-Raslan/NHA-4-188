@@ -298,27 +298,3 @@ if analyze_btn:
 
 # Evaluation Metrics
 
-st.divider()
-st.subheader("📈 Model Evaluation Metrics")
-
-metrics_path = os.path.join(APP_PATH, '..', 'evaluation', 'outputs', 'metrics.json')
-
-if os.path.exists(metrics_path):
-    with open(metrics_path, 'r') as f:
-        metrics = json.load(f)
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Accuracy",  f"{metrics['accuracy']  * 100:.1f}%")
-    with col2:
-        st.metric("Precision", f"{metrics['precision'] * 100:.1f}%")
-    with col3:
-        st.metric("Recall",    f"{metrics['recall']    * 100:.1f}%")
-    with col4:
-        st.metric("F1 Score",  f"{metrics['f1_score']  * 100:.1f}%")
-
-    cm_path = os.path.join(APP_PATH, '..', 'evaluation', 'outputs', 'confusion_matrix.png')
-    if os.path.exists(cm_path):
-        st.image(cm_path, caption="Confusion Matrix", use_container_width=True)
-else:
-    st.info("ℹ️ Run evaluation.py first to see metrics here.")
