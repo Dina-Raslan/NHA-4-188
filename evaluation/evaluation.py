@@ -1,7 +1,10 @@
 # evaluation/evaluation.py
 import os
+import sys
 import json
 import numpy as np
+import torch
+from PIL import Image
 import matplotlib.pyplot as plt
 import seaborn as sns
 import mlflow
@@ -13,19 +16,16 @@ from sklearn.metrics import (
     confusion_matrix
 )
 
-# Define Class Labels
-CLASS_NAMES = [
-    "Eczema",
-    "Melanoma",
-    "Atopic Dermatitis",
-    "Basal Cell Carcinoma",
-    "Melanocytic Nevi",
-    "Benign Keratosis",
-    "Psoriasis",
-    "Seborrheic Keratosis",
-    "Tinea Ringworm",
-    "Molluscum"
-]
+# Make src/ importable (config.py, model.py, transforms.py live there)
+SRC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
+sys.path.append(SRC_DIR)
+
+import config
+from model import SkinLesionClassifier
+from transforms import test_transform
+
+# Define Class Labels (must match config.CLASS_NAMES / ImageFolder order)
+CLASS_NAMES = config.CLASS_NAMES
 
 # Calculate Classification Metrics
 def compute_metrics(y_true, y_pred):
@@ -65,14 +65,68 @@ def save_metrics(metrics, save_path):
         json.dump(metrics, f, indent=4)
     print(f" Metrics saved → {save_path}")
 
+
+# Run the Real Trained Model on the Real Test Set
+def get_real_predictions():
+    """
+    Loads the trained checkpoint (config.BEST_MODEL_PATH) and runs it over
+    every image in config.TEST_DIR, returning true/predicted label indices.
+    Replaces the old dummy-data placeholder with real inference.
+    """
+    if not os.path.exists(config.BEST_MODEL_PATH):
+        raise FileNotFoundError(
+            f"No trained model found at {config.BEST_MODEL_PATH}. "
+            f"Train the CV model first (src/trainer.py or trainer_mlflow.py)."
+        )
+    if not os.path.isdir(config.TEST_DIR):
+        raise FileNotFoundError(
+            f"Test directory not found at {config.TEST_DIR}. "
+            f"Expected an ImageFolder-style structure with one subfolder per class."
+        )
+
+    device = config.DEVICE
+    model = SkinLesionClassifier()
+    state_dict = torch.load(config.BEST_MODEL_PATH, map_location=device)
+    model.load_state_dict(state_dict)
+    model.to(device)
+    model.eval()
+
+    class_to_idx = {name: idx for idx, name in enumerate(CLASS_NAMES)}
+
+    y_true, y_pred = [], []
+    total = 0
+    with torch.no_grad():
+        for true_class in sorted(os.listdir(config.TEST_DIR)):
+            class_folder = os.path.join(config.TEST_DIR, true_class)
+            if not os.path.isdir(class_folder) or true_class not in class_to_idx:
+                continue
+            true_idx = class_to_idx[true_class]
+
+            for filename in os.listdir(class_folder):
+                image_path = os.path.join(class_folder, filename)
+                try:
+                    img = Image.open(image_path).convert("RGB")
+                    input_tensor = test_transform(img).unsqueeze(0).to(device)
+                    logits = model(input_tensor)
+                    pred_idx = logits.argmax(dim=1).item()
+                except Exception as e:
+                    print(f"Skipped {image_path}: {e}")
+                    continue
+
+                y_true.append(true_idx)
+                y_pred.append(pred_idx)
+                total += 1
+                if total % 200 == 0:
+                    print(f"  Evaluated {total} images so far...")
+
+    print(f"Finished evaluating {total} real test images.")
+    return np.array(y_true), np.array(y_pred)
+
 # Main Execution: Evaluation Pipeline
 if __name__ == "__main__":
 
-    # Generate Dummy Data for Testing
-    np.random.seed(42)
-    n_samples = 200
-    y_true = np.random.randint(0, 10, n_samples)
-    y_pred = np.random.randint(0, 10, n_samples)
+    # Run the real trained model on the real test set (no more dummy data)
+    y_true, y_pred = get_real_predictions()
 
     # Calculate Performance Metrics
     metrics = compute_metrics(y_true, y_pred)
